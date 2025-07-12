@@ -1,66 +1,184 @@
 "use client"
+import React, { ReactNode, ReactElement, isValidElement } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-import * as React from "react"
-import * as AccordionPrimitive from "@radix-ui/react-accordion"
-import { ChevronDownIcon } from "lucide-react"
+type AccordionContextType = {
+  isActive: boolean;
+  value: string;
+  onChangeIndex: (value: string) => void;
+};
 
-import { cn } from "@/lib/utils"
+const AccordionContext = React.createContext<AccordionContextType>({
+  isActive: false,
+  value: '',
+  onChangeIndex: () => {}
+});
 
-function Accordion({
-  ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Root>) {
-  return <AccordionPrimitive.Root data-slot="accordion" {...props} />
-}
+const useAccordion = () => React.useContext(AccordionContext);
 
-function AccordionItem({
-  className,
-  ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Item>) {
-  return (
-    <AccordionPrimitive.Item
-      data-slot="accordion-item"
-      className={cn("border-b last:border-b-0", className)}
-      {...props}
-    />
-  )
-}
-
-function AccordionTrigger({
-  className,
+export function AccordionContainer({
   children,
-  ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Trigger>) {
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <AccordionPrimitive.Header className="flex">
-      <AccordionPrimitive.Trigger
-        data-slot="accordion-trigger"
-        className={cn(
-          "focus-visible:border-ring focus-visible:ring-ring/50 flex flex-1 items-start justify-between gap-4 rounded-md py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        <ChevronDownIcon className="text-muted-foreground pointer-events-none size-4 shrink-0 translate-y-0.5 transition-transform duration-200" />
-      </AccordionPrimitive.Trigger>
-    </AccordionPrimitive.Header>
-  )
+    <div className={cn('grid grid-cols-2 gap-1', className)}>{children}</div>
+  );
 }
 
-function AccordionContent({
-  className,
+export function AccordionWrapper({ 
+  children 
+}: { 
+  children: ReactNode 
+}) {
+  return <div>{children}</div>;
+}
+
+export function Accordion({
   children,
-  ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Content>) {
+  multiple,
+  defaultValue,
+}: {
+  children: ReactNode;
+  multiple?: boolean;
+  defaultValue?: string | string[];
+}) {
+  const [activeIndex, setActiveIndex] = React.useState<string[]>(
+    multiple ? (defaultValue ? (Array.isArray(defaultValue) ? defaultValue : [defaultValue]) : []) : 
+    (defaultValue ? (Array.isArray(defaultValue) ? [defaultValue[0]] : [defaultValue]) : [])
+  );
+
+  function onChangeIndex(value: string) {
+    setActiveIndex((currentActiveIndex) => {
+      if (!multiple) {
+        return value === currentActiveIndex[0] ? [] : [value];
+      }
+
+      if (currentActiveIndex.includes(value)) {
+        return currentActiveIndex.filter((i) => i !== value);
+      }
+
+      return [...currentActiveIndex, value];
+    });
+  }
+
+  return React.Children.map(children, (child) => {
+    if (!isValidElement<{ value?: string }>(child)) return null;
+
+    const value = child.props.value ?? '';
+    const isActive = multiple
+      ? activeIndex.includes(value)
+      : activeIndex[0] === value;
+
+    return (
+      <AccordionContext.Provider value={{ isActive, value, onChangeIndex }}>
+        {React.cloneElement(child)}
+      </AccordionContext.Provider>
+    );
+  });
+}
+
+export function AccordionItem({ 
+  children, 
+  value 
+}: { 
+  children: ReactNode; 
+  value: string 
+}) {
+  const { isActive } = useAccordion();
+
   return (
-    <AccordionPrimitive.Content
-      data-slot="accordion-content"
-      className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden text-sm"
-      {...props}
+    <div
+    data-active={isActive || undefined}
+      className={`rounded-lg overflow-hidden mb-2  ${
+        isActive
+          ? 'active border-2 dark:border-[#656fe2]  border-[#F2F2F2] dark:bg-[#E0ECFB] bg-[#F2F2F2]'
+          : 'bg-transparent border-2 dark:hover:border-[#656fe2]'
+      }
+    `}
+    data-value={value}
     >
-      <div className={cn("pt-0 pb-4", className)}>{children}</div>
-    </AccordionPrimitive.Content>
-  )
+      {children}
+    </div>
+  );
 }
 
-export { Accordion, AccordionItem, AccordionTrigger, AccordionContent }
+export function AccordionHeader({
+  children,
+  customIcon,
+  className
+}: {
+  children: ReactNode;
+  customIcon?: boolean;
+  className?: string;
+}) {
+  const { isActive, value, onChangeIndex } = useAccordion();
+
+  return (
+    <motion.div
+    data-active={isActive || undefined}
+      className={`group p-4 cursor-pointer transition-all font-semibold    dark:text-white text-black dark:hover:bg-[#1e2a78] hover:bg-[#F2F2F2] dark:hover:text-white hover:text-black flex justify-between items-center ${
+        isActive
+          ? 'active  dark:bg-[#1e2a78] bg-[#F2F2F2] '
+          : 'dark:bg-[#11112b] bg-white'
+      }
+      `}
+      onClick={() => onChangeIndex(value)}
+    >
+      {children}
+      {!customIcon && (
+        <ChevronDown
+          className={cn(
+            "transition-transform ",
+            isActive ? "rotate-180" : "rotate-0",
+          )}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+export function AccordionPanel({ 
+  children,
+  className
+}: { 
+  children: ReactNode;
+  className?: string;
+}) {
+  const { isActive } = useAccordion();
+
+  return (
+    <AnimatePresence initial={true}>
+      {isActive && (
+        <motion.div
+        data-active={isActive || undefined}
+          initial={{ height: 0, overflow: 'hidden' }}
+          animate={{ height: 'auto', overflow: 'hidden' }}
+          exit={{ height: 0 }}
+          transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
+          className={cn('group dark:bg-white bg-[#F2F2F2]', className)}
+        >
+          <motion.article
+            initial={{ clipPath: 'polygon(0 0, 100% 0, 100% 0, 0 0)' }}
+            animate={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }}
+            exit={{
+              clipPath: 'polygon(0 0, 100% 0, 100% 0, 0 0)',
+            }}
+            transition={{
+              type: 'spring',
+              duration: 0.4,
+              bounce: 0,
+            }}
+            className={`p-3 bg-transparent text-black `}
+          >
+            {children}
+          </motion.article>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
